@@ -36,10 +36,16 @@ python src/scrape.py
 make build   # собрать образ
 make run     # запустить, результат в out/result.json
 make clean   # удалить образ и out/
-make ci      # build + run + валидация JSON (также вызывается из CI)
+make ci      # build + run (также вызывается из CI)
 ```
 
-Если `make` не установлен на Windows: `choco install make` или через WSL.
+### Запуск на Windows
+
+Если `make` не установлен: `choco install make` или используйте WSL.
+Запускать `make` нужно из **Git Bash или WSL** — в `cmd.exe` не работает
+`rm -rf` в цели `clean`. Путь для bind-mount берётся из `$(CURDIR)`
+(make-переменная), поэтому он уже в Windows-виде и не искажается
+конвертацией путей MSYS.
 
 ## CI
 

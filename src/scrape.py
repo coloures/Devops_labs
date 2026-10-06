@@ -16,15 +16,13 @@ def main() -> None:
         page = browser.new_page()
         page.goto(URL, wait_until="networkidle")
 
-        # Данные подгружаются JS по мере скролла, поэтому скроллим,
-        # пока появляются новые цитаты.
         stable_rounds = 0
         previous = -1
         quote_count = 0
 
         while stable_rounds < 3:
             page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-            page.wait_for_load_state("networkidle")
+            page.wait_for_timeout(1000)
             quote_count = page.locator(".quote").count()
 
             if quote_count == previous:
