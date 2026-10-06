@@ -14,7 +14,8 @@ def main() -> None:
     with sync_playwright() as p:
         browser = p.chromium.launch()
         page = browser.new_page()
-        page.goto(URL, wait_until="networkidle")
+        page.goto(URL, wait_until="domcontentloaded")
+        page.wait_for_selector(".quote")
 
         stable_rounds = 0
         previous = -1
