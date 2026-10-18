@@ -3,3 +3,17 @@ node_modules/
 __pycache__/
 .venv/
 *.pyc
+
+# Terraform / OpenTofu
+infra/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+crash.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Локальные инструменты и артефакты
+.tools/
