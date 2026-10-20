@@ -1,0 +1,32 @@
+name: quotes-lab2
+
+services:
+  floci:
+    image: floci/floci:2.2.0
+    ports:
+      - "4566:4566"
+    environment:
+      FLOCI_DEFAULT_REGION: us-east-1
+    # Состояние эмулятора живёт в памяти: после down окружение создаётся
+    # OpenTofu с нуля, без остатков bucket/queue.
+
+  scraper:
+    image: quotes-scraper
+    build:
+      context: .
+    depends_on:
+      floci:
+        condition: service_healthy
+    environment:
+      # Внутри compose-сети эмулятор доступен по имени сервиса, а не localhost.
+      AWS_ENDPOINT_URL: http://floci:4566
+      AWS_DEFAULT_REGION: us-east-1
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      SQS_QUEUE_NAME: ${SQS_QUEUE_NAME:-quotes-jobs}
+      S3_BUCKET: ${S3_BUCKET:-quotes-results}
+      SQS_WAIT_TIME_SECONDS: ${SQS_WAIT_TIME_SECONDS:-10}
+      SCRAPE_URL: ${SCRAPE_URL:-https://quotes.toscrape.com/scroll}
+    command: ["python", "src/worker.py"]
+    restart: unless-stopped
+    stop_grace_period: 15s

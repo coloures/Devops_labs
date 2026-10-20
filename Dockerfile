@@ -25,4 +25,6 @@ ENV PATH="/app/.venv/bin:$PATH"
 WORKDIR /app
 COPY src/ ./src/
 ENV OUT_DIR=/app/out
-CMD ["python", "src/scrape.py"]
+# По умолчанию — воркер, который читает задания из SQS и пишет результат в S3.
+# Локальный запуск первой лабораторной: python src/scrape.py.
+CMD ["python", "src/worker.py"]

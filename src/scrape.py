@@ -10,11 +10,12 @@ OUT_DIR = os.environ.get("OUT_DIR", os.path.join(os.path.dirname(__file__), ".."
 OUT_FILE = os.path.join(OUT_DIR, "result.json")
 
 
-def main() -> None:
+def scrape_quotes(url: str = URL) -> list[dict]:
+    """Open the page in Chromium, scroll to the end and return all quotes."""
     with sync_playwright() as p:
         browser = p.chromium.launch()
         page = browser.new_page()
-        page.goto(URL, wait_until="domcontentloaded")
+        page.goto(url, wait_until="domcontentloaded")
         page.wait_for_selector(".quote")
 
         stable_rounds = 0
@@ -44,6 +45,12 @@ def main() -> None:
 
     if not quotes:
         raise RuntimeError("No quotes were scraped")
+
+    return quotes
+
+
+def main() -> None:
+    quotes = scrape_quotes()
 
     os.makedirs(OUT_DIR, exist_ok=True)
     with open(OUT_FILE, "w", encoding="utf-8") as f:
