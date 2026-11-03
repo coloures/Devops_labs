@@ -1,0 +1,12 @@
+---
+# `make deploy`: развернуть или обновить стек Redis + scraper + Nginx.
+# Playbook применяет только роль scraper; при неизменных исходниках повторный
+# запуск не меняет ничего (changed=0).
+- name: Deploy the application stack
+  hosts: lab
+  become: true
+  gather_facts: true
+  vars:
+    ansible_user: "{{ admin_user }}"
+  roles:
+    - scraper

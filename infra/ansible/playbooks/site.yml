@@ -1,0 +1,38 @@
+---
+# Шаг 2 provisioning: вся дальнейшая настройка выполняется под постоянным
+# пользователем admin. Роль ssh_hardening идёт последней и только после того,
+# как вход под admin реально подтверждён (см. DoD, п.3).
+- name: Configure the target host as the permanent admin user
+  hosts: lab
+  become: true
+  gather_facts: true
+  vars:
+    ansible_user: "{{ admin_user }}"
+  pre_tasks:
+    - name: Wait for SSH as {{ admin_user }}
+      ansible.builtin.wait_for_connection:
+        timeout: 60
+
+    - name: Find out which user we are logged in as
+      ansible.builtin.command: whoami
+      register: site_whoami
+      become: false
+      changed_when: false
+
+    - name: Require a real login as the permanent admin before hardening
+      ansible.builtin.assert:
+        that:
+          - site_whoami.stdout == admin_user
+        fail_msg: >-
+          Connected as '{{ site_whoami.stdout }}', expected '{{ admin_user }}'.
+          Hardening is not applied; fix the admin login first.
+  roles:
+    - docker_engine
+    - scraper
+    - ssh_hardening
+  post_tasks:
+    - name: Show the provisioning summary
+      ansible.builtin.debug:
+        msg: >-
+          admin={{ admin_user }} http_port={{ http_port }}
+          results={{ results_dir }} compose={{ compose_file }}

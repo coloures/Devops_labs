@@ -1,0 +1,15 @@
+---
+extends: default
+ignore: |
+  .lab/
+  infra/ansible/inventories/lab/
+rules:
+  line-length: disable
+  document-start: disable
+  comments-indentation: disable
+  # `#cloud-config` в infra/cloud-init.yaml обязан быть без пробела после #.
+  comments:
+    require-starting-space: false
+  # В GitHub Actions ключ верхнего уровня `on:` — не булево значение.
+  truthy:
+    check-keys: false

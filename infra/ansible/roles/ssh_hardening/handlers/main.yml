@@ -1,0 +1,15 @@
+---
+# Два handler-а слушают один topic и выполняются по порядку: сначала проверка
+# конфига, и только если она прошла — перезапуск sshd. Если конфиг сломан,
+# playbook падает раньше, чем sshd будет перезапущен.
+- name: Validate sshd configuration
+  ansible.builtin.command:
+    cmd: sshd -t
+  changed_when: false
+  listen: Restart sshd
+
+- name: Restart sshd
+  ansible.builtin.service:
+    name: ssh
+    state: restarted
+  listen: Restart sshd

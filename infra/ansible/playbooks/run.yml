@@ -1,0 +1,30 @@
+---
+# `make run URL=...`: добавить ровно одно задание в stream `jobs`.
+# job_id генерируется в Makefile и передаётся сюда через -e job_id=... .
+- name: Publish one scraping job to the Redis stream
+  hosts: lab
+  become: true
+  gather_facts: false
+  vars:
+    ansible_user: "{{ admin_user }}"
+  tasks:
+    - name: Make sure a job was supplied
+      ansible.builtin.assert:
+        that:
+          - job_id is defined and job_id | length > 0
+          - job_url is defined and job_url | length > 0
+        fail_msg: "run.yml needs -e job_id=<id> -e job_url=<url>"
+
+    - name: Add the job to the stream
+      ansible.builtin.command:
+        cmd: >-
+          docker exec {{ redis_container }} redis-cli XADD {{ redis_stream }} *
+          job_id {{ job_id }} url {{ job_url }}
+      register: run_publish
+      changed_when: true
+
+    - name: Show the created entry
+      ansible.builtin.debug:
+        msg: >-
+          stream={{ redis_stream }} job_id={{ job_id }}
+          entry={{ run_publish.stdout | trim }}

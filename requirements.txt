@@ -1,2 +1,3 @@
-boto3
+# Playwright-скрапер (src/scrape.py) и воркер Redis Streams (src/worker.py).
 playwright
+redis

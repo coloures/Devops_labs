@@ -1,0 +1,5 @@
+---
+# Значения по умолчанию, чтобы роль была самодостаточной. Они имеют самый
+# низкий приоритет, поэтому group_vars/в inventory их перекрывают.
+admin_user: admin
+admin_sudoers_file: "/etc/sudoers.d/90-{{ admin_user }}"

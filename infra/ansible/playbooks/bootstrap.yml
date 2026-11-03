@@ -1,0 +1,14 @@
+---
+# Шаг 1 provisioning: подключиться временным bootstrap-пользователем
+# (его создал cloud-init) и создать постоянного пользователя admin с ключом и sudo.
+# Больше здесь ничего не настраивается: остальное делает site.yml уже под admin.
+- name: Create the permanent admin user
+  hosts: lab
+  become: true
+  gather_facts: true
+  roles:
+    - bootstrap
+  post_tasks:
+    # Сбрасываем SSH-соединение, чтобы site.yml подключился заново — уже под admin.
+    - name: Drop the bootstrap SSH connection
+      ansible.builtin.meta: reset_connection

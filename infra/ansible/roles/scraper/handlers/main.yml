@@ -1,0 +1,9 @@
+---
+# Handler применяет стек, когда изменилась конфигурация deploy/ или был
+# пересобран образ. Выполняется один раз, даже если нотифицировали дважды.
+# `up -d` пересоздаёт контейнеры, у которых изменился образ или конфигурация.
+- name: Apply the quotes stack
+  ansible.builtin.command:
+    cmd: docker compose -f {{ compose_file }} up -d
+  changed_when: true
+  listen: Apply the quotes stack

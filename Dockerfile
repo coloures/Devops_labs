@@ -25,6 +25,6 @@ ENV PATH="/app/.venv/bin:$PATH"
 WORKDIR /app
 COPY src/ ./src/
 ENV OUT_DIR=/app/out
-# По умолчанию — воркер, который читает задания из SQS и пишет результат в S3.
-# Локальный запуск первой лабораторной: python src/scrape.py.
+# Воркер читает задания из Redis Stream и пишет результат на диск; каталог
+# результатов монтируется как /srv/quotes-scraper/results (deploy/compose.yaml).
 CMD ["python", "src/worker.py"]

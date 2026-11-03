@@ -1,9 +1,14 @@
+# В образ уходит только код скрапера. Всё остальное (infra, deploy, git)
+# объявляется здесь, а не в Dockerfile.
 .git
 .github
+.lab
 out/
 node_modules/
 __pycache__/
 .venv/
 *.pyc
 infra/
+deploy/
 .tools/
+.build-hash

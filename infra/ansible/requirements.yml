@@ -1,0 +1,11 @@
+---
+# Коллекции, которые нужны ролям лабораторной.
+# Устанавливаются командой `make deps` (ansible-galaxy collection install -r).
+collections:
+  # docker_compose_v2 — единственный используемый модуль коллекции; работает
+  # через Docker CLI (compose plugin) и НЕ требует Docker SDK для Python.
+  - name: community.docker
+    version: ">=3.6.0"
+  # ansible.posix.authorized_key.
+  - name: ansible.posix
+    version: ">=1.5.0"

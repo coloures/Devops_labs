@@ -1,0 +1,5 @@
+---
+# Обновление кэша apt нужно только когда менялся репозиторий/ключ Docker.
+- name: Update the apt cache
+  ansible.builtin.apt:
+    update_cache: true
