@@ -1,0 +1,50 @@
+---
+# Роль bootstrap: единственное, что делается под временным пользователем —
+# создание постоянного admin с ключом и sudo. Всё остальное (docker, приложение,
+# hardening) выполняется позже и уже под admin.
+
+- name: Ensure the permanent admin user exists with sudo and bash
+  ansible.builtin.user:
+    name: "{{ admin_user }}"
+    groups: sudo
+    append: true
+    shell: /bin/bash
+    create_home: true
+    state: present
+
+- name: Install the admin SSH public key
+  ansible.posix.authorized_key:
+    user: "{{ admin_user }}"
+    key: "{{ lookup('file', admin_ssh_public_key_file) }}"
+    state: present
+    exclusive: false
+
+- name: Allow passwordless sudo for the admin user
+  ansible.builtin.copy:
+    dest: "{{ admin_sudoers_file }}"
+    content: "{{ admin_user }} ALL=(ALL) NOPASSWD:ALL\n"
+    owner: root
+    group: root
+    mode: "0440"
+    validate: "visudo -cf %s"
+
+# Явное доказательство, что вход под admin реально работает по SSH с этого
+# control node ДО того, как будет выключен временный bootstrap-вход.
+- name: Prove that the admin can log in over SSH (new connection)
+  ansible.builtin.command:
+    cmd: >-
+      ssh -i {{ ansible_ssh_private_key_file }}
+      -o BatchMode=yes
+      -o StrictHostKeyChecking=accept-new
+      -o UserKnownHostsFile={{ known_hosts_file }}
+      -o ConnectTimeout=5
+      {{ admin_user }}@{{ ansible_host }} whoami
+  delegate_to: localhost
+  become: false
+  register: bootstrap_admin_login
+  changed_when: false
+  retries: 10
+  delay: 3
+  until: >-
+    bootstrap_admin_login.rc == 0
+    and bootstrap_admin_login.stdout | trim == admin_user

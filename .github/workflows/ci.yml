@@ -8,12 +8,33 @@ on:
 
 jobs:
   ci:
+    name: make ci
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Install OpenTofu
-        uses: opentofu/setup-opentofu@v1
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          tofu_version: "1.13.1"
+          python-version: "3.12"
+
+      # ansible-lint тянет за собой yamllint — отдельно его ставить не нужно.
+      - name: Install ansible-core and ansible-lint
+        run: |
+          python -m pip install --upgrade pip
+          pip install ansible-core ansible-lint
+
+      - name: Show tool versions
+        run: |
+          ansible --version
+          ansible-lint --version
+          yamllint --version
+          docker compose version
+
+      # Единственная точка входа: те же проверки, что и локально.
+      # make ci = ansible-galaxy install -r requirements.yml
+      #           + yamllint + ansible-lint
+      #           + ansible-playbook --syntax-check (на hosts.example.yml)
+      #           + docker compose config
       - name: Run make ci
         run: make ci

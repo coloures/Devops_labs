@@ -1,0 +1,97 @@
+---
+# Роль scraper: копирует приложение и deploy-конфигурацию на целевую VM,
+# собирает образ только когда исходники изменились, и держит стек
+# Redis + scraper + Nginx поднятым через docker compose.
+
+- name: Create the application directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - "{{ app_dir }}"
+    - "{{ deploy_dir }}"
+    - "{{ results_dir }}"
+
+- name: Copy the application sources to the target host
+  ansible.builtin.copy:
+    src: "{{ repo_root }}/{{ item }}"
+    dest: "{{ app_dir }}/"
+    owner: root
+    group: root
+    mode: preserve
+  loop:
+    - src
+    - Dockerfile
+    - requirements.txt
+    - .dockerignore
+
+- name: Copy the deploy configuration to the target host
+  ansible.builtin.copy:
+    src: "{{ repo_root }}/deploy/"
+    dest: "{{ deploy_dir }}/"
+    owner: root
+    group: root
+    mode: preserve
+  notify: Apply the quotes stack
+
+# --- Сборка образа только при изменении исходников ---------------------------
+- name: Compute the checksum of the build context
+  ansible.builtin.shell:
+    cmd: >-
+      set -o pipefail &&
+      find src Dockerfile requirements.txt .dockerignore -type f -print0
+      | sort -z | xargs -0 sha256sum | sha256sum | cut -d' ' -f1
+    chdir: "{{ app_dir }}"
+    executable: /bin/bash
+  register: scraper_source_hash
+  changed_when: false
+
+- name: Look for the recorded build hash
+  ansible.builtin.stat:
+    path: "{{ scraper_hash_file }}"
+  register: scraper_hash_stat
+
+- name: Read the recorded build hash
+  ansible.builtin.slurp:
+    src: "{{ scraper_hash_file }}"
+  register: scraper_hash_recorded
+  when: scraper_hash_stat.stat.exists
+
+- name: Decide whether the scraper image must be rebuilt
+  ansible.builtin.set_fact:
+    scraper_needs_build: >-
+      {{ (not scraper_hash_stat.stat.exists)
+         or ((scraper_hash_recorded.content | default('') | b64decode | trim)
+             != scraper_source_hash.stdout) }}
+
+- name: Build the scraper image
+  ansible.builtin.command:
+    cmd: docker compose -f {{ compose_file }} build scraper
+  when: scraper_needs_build
+  changed_when: true
+  notify: Apply the quotes stack
+
+- name: Record the source hash of the built image
+  ansible.builtin.copy:
+    dest: "{{ scraper_hash_file }}"
+    content: "{{ scraper_source_hash.stdout }}\n"
+    owner: root
+    group: root
+    mode: "0644"
+  when: scraper_needs_build
+
+# --- Приведение стека к нужному состоянию (идемпотентно) ---------------------
+# build=never: образ уже собран выше; pull=missing: redis/nginx скачиваются
+# только если их нет локально. При неизменной конфигурации модуль не меняет
+# ничего, поэтому второй запуск даёт changed=0.
+- name: Ensure the application stack is up
+  community.docker.docker_compose_v2:
+    project_src: "{{ deploy_dir }}"
+    files:
+      - compose.yaml
+    state: present
+    build: never
+    pull: missing

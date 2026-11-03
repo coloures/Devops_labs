@@ -1,0 +1,68 @@
+name: quotes-scraper
+
+# Лабораторная 3: Redis Streams + скрапер + Nginx на одной Ubuntu VM.
+# - Redis вызывает только воркер внутри compose-сети (порт 6379 не публикуется);
+# - результаты скрапер пишет локально в /srv/quotes-scraper/results;
+# - наружу открыт единственный HTTP-порт Nginx, каталог результатов он видит только для чтения.
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: quotes-redis
+    command: ["redis-server", "/usr/local/etc/redis/redis.conf"]
+    volumes:
+      - ./redis.conf:/usr/local/etc/redis/redis.conf:ro
+      # AOF-файлы живут в этом томе и переживают перезапуск контейнера.
+      - redis-data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  scraper:
+    image: quotes-scraper
+    container_name: quotes-scraper
+    build:
+      # Контекст — корень приложения (/srv/quotes-scraper на целевой VM).
+      context: ..
+      dockerfile: Dockerfile
+    depends_on:
+      redis:
+        condition: service_healthy
+    # Воркер лабораторной 3: Redis Streams -> JSON на диск -> XACK.
+    command: ["python", "src/redis_worker.py"]
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      REDIS_STREAM: jobs
+      REDIS_GROUP: scrapers
+      REDIS_CONSUMER: scraper-1
+      RESULTS_DIR: /srv/quotes-scraper/results
+      SCRAPE_URL: ${SCRAPE_URL:-https://quotes.toscrape.com/scroll}
+      # Хуки для make fault-test; в обычном режиме пустые.
+      SCRAPER_FAULT: ${SCRAPER_FAULT:-}
+      SCRAPER_ONCE: ${SCRAPER_ONCE:-}
+    volumes:
+      # Единственное место, куда воркер пишет результат.
+      - /srv/quotes-scraper/results:/srv/quotes-scraper/results
+    restart: unless-stopped
+    # Даём воркеру закончить текущее задание и сделать XACK.
+    stop_grace_period: 15s
+
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: quotes-nginx
+    depends_on:
+      - scraper
+    ports:
+      # Наружу публикуется только HTTP. 6379 у Redis не публикуется вообще.
+      - "${HTTP_PORT:-8080}:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      # Каталог результатов — только для чтения.
+      - /srv/quotes-scraper/results:/usr/share/nginx/html/results:ro
+    restart: unless-stopped
+
+volumes:
+  redis-data:

@@ -4,16 +4,12 @@ __pycache__/
 .venv/
 *.pyc
 
-# Terraform / OpenTofu
-infra/.terraform/
-*.tfstate
-*.tfstate.*
-*.tfvars
-crash.log
-override.tf
-override.tf.json
-*_override.tf
-*_override.tf.json
+# Артефакты лабораторной 3: ключи, inventory, логи, установленные коллекции.
+.lab/
+infra/ansible/inventories/lab/
+infra/ansible/.ansible/
+collections/
+*.retry
 
-# Локальные инструменты и артефакты
+# Локальные инструменты и артефакты.
 .tools/

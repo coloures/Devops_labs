@@ -1,0 +1,147 @@
+---
+# `make fault-test`: доказать отказоустойчивость pipeline.
+#
+# 1. Останавливаем основной скрапер и добавляем задание.
+# 2. Запускаем одноразовый воркер в fault-режиме: он забирает задание и
+#    падает ДО XACK (запись остаётся в pending entries list).
+# 3. Проверяем, что запись действительно pending.
+# 4. Запускаем основной скрапер — он перехватывает pending и доигрывает задание.
+# 5. Повторно доставляем тот же job_id: файл не создаётся заново и не портится.
+- name: Prove that a crash between delivery and XACK is recoverable
+  hosts: lab
+  become: true
+  gather_facts: false
+  vars:
+    ansible_user: "{{ admin_user }}"
+    fault_timeout: 180
+  tasks:
+    - name: Make sure a job was supplied
+      ansible.builtin.assert:
+        that:
+          - job_id is defined and job_id | length > 0
+          - job_url is defined and job_url | length > 0
+        fail_msg: "fault.yml needs -e job_id=<id> -e job_url=<url>"
+
+    - name: Stop the scraper so it cannot pick up the injected job
+      ansible.builtin.command:
+        cmd: docker stop {{ scraper_container }}
+      changed_when: true
+
+    - name: Publish the job that will be interrupted
+      ansible.builtin.command:
+        cmd: >-
+          docker exec {{ redis_container }} redis-cli XADD {{ redis_stream }} *
+          job_id {{ job_id }} url {{ job_url }}
+      changed_when: true
+
+    - name: Start a throw-away scraper that crashes right after delivery
+      ansible.builtin.command:
+        cmd: >-
+          docker run --rm
+          --network {{ compose_project }}_default
+          -e REDIS_HOST=redis -e REDIS_PORT=6379
+          -e REDIS_STREAM={{ redis_stream }} -e REDIS_GROUP={{ redis_group }}
+          -e REDIS_CONSUMER={{ redis_group }}-fault
+          -e RESULTS_DIR={{ results_dir }}
+          -e SCRAPER_FAULT=crash_before_ack
+          -v {{ results_dir }}:{{ results_dir }}
+          {{ scraper_image }} python src/worker.py
+      register: fault_run
+      changed_when: false
+      failed_when: false
+
+    - name: Read the pending entries list after the crash
+      ansible.builtin.command:
+        cmd: >-
+          docker exec {{ redis_container }} redis-cli --raw
+          XPENDING {{ redis_stream }} {{ redis_group }}
+      register: fault_pending
+      changed_when: false
+
+    - name: The interrupted job must stay pending
+      ansible.builtin.assert:
+        that:
+          - (fault_pending.stdout_lines | first | default('0')) | trim | int >= 1
+        fail_msg: >-
+          expected at least one pending entry after the crash, got:
+          {{ fault_pending.stdout }}
+
+    - name: Start the scraper again
+      ansible.builtin.command:
+        cmd: docker start {{ scraper_container }}
+      changed_when: true
+
+    - name: Wait until the pending job is completed
+      ansible.builtin.stat:
+        path: "{{ results_dir }}/{{ job_id }}.json"
+      register: fault_file
+      until: fault_file.stat.exists and fault_file.stat.size | int > 0
+      retries: "{{ (fault_timeout | int) // 5 }}"
+      delay: 5
+
+    - name: Wait for an empty pending entries list after the retry
+      ansible.builtin.command:
+        cmd: >-
+          docker exec {{ redis_container }} redis-cli --raw
+          XPENDING {{ redis_stream }} {{ redis_group }}
+      register: fault_pending_after
+      until: (fault_pending_after.stdout | trim) == '0'
+      retries: "{{ (fault_timeout | int) // 3 }}"
+      delay: 3
+      changed_when: false
+
+    - name: Record the checksum of the result file
+      ansible.builtin.stat:
+        path: "{{ results_dir }}/{{ job_id }}.json"
+        checksum_algorithm: sha256
+      register: fault_checksum_before
+
+    - name: Re-deliver the very same job_id
+      ansible.builtin.command:
+        cmd: >-
+          docker exec {{ redis_container }} redis-cli XADD {{ redis_stream }} *
+          job_id {{ job_id }} url {{ job_url }}
+      changed_when: true
+
+    - name: Wait until the redelivered job is acknowledged
+      ansible.builtin.command:
+        cmd: >-
+          docker exec {{ redis_container }} redis-cli --raw
+          XPENDING {{ redis_stream }} {{ redis_group }}
+      register: fault_pending_redelivery
+      until: (fault_pending_redelivery.stdout | trim) == '0'
+      retries: "{{ (fault_timeout | int) // 3 }}"
+      delay: 3
+      changed_when: false
+
+    - name: Record the checksum of the result file after redelivery
+      ansible.builtin.stat:
+        path: "{{ results_dir }}/{{ job_id }}.json"
+        checksum_algorithm: sha256
+      register: fault_checksum_after
+
+    - name: The redelivered job must not modify the existing result
+      ansible.builtin.assert:
+        that:
+          - fault_checksum_before.stat.checksum == fault_checksum_after.stat.checksum
+        fail_msg: "the result file was rewritten on redelivery of the same job_id"
+
+    - name: Look for result files of this job id
+      ansible.builtin.find:
+        paths: "{{ results_dir }}"
+        patterns: "{{ job_id }}*"
+      register: fault_matches
+
+    - name: Exactly one result file must exist for the job id
+      ansible.builtin.assert:
+        that:
+          - fault_matches.matched == 1
+        fail_msg: >-
+          expected exactly one file for job_id={{ job_id }}, got
+          {{ fault_matches.matched }}
+
+    - name: Show the fault-test summary
+      ansible.builtin.debug:
+        msg: >-
+          job {{ job_id }}: stayed pending after the crash, was finished after
+          restart, and redelivery did not touch the result file

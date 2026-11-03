@@ -1,0 +1,14 @@
+---
+# Официальный apt-репозиторий Docker (не пакеты из Ubuntu).
+docker_apt_key_url: https://download.docker.com/linux/ubuntu/gpg
+docker_apt_keyring: /etc/apt/keyrings/docker.asc
+docker_apt_repository_url: https://download.docker.com/linux/ubuntu
+
+# Engine + Buildx (docker-buildx-plugin) + Compose plugin
+# (docker-compose-plugin -> команда `docker compose`).
+docker_packages:
+  - docker-ce
+  - docker-ce-cli
+  - containerd.io
+  - docker-buildx-plugin
+  - docker-compose-plugin

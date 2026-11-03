@@ -1,0 +1,37 @@
+#cloud-config
+# Bootstrap целевой VM. Виртуальную машину (Ubuntu 24.04, 2 CPU / 4 GB / 20 GB)
+# создаёт Multipass, а этот файл готовит ровно тот минимум, который нужен для
+# первого входа Ansible:
+#   * временный пользователь,
+#   * SSH-ключ,
+#   * sudo,
+#   * Python.
+#
+# Docker, приложение и постоянный пользователь admin здесь НЕ настраиваются:
+# это делают роли Ansible (bootstrap, docker_engine, scraper) — иначе после
+# первого входа конфигурация перестала бы быть описана кодом.
+users:
+  # `default` — основной пользователь образа (ubuntu), его настраивает Multipass.
+  - default
+  # Временный пользователь только для первого подключения Ansible.
+  # Роль ssh_hardening отключает его после того, как вход под admin подтверждён.
+  - name: bootstrap
+    gecos: Temporary bootstrap user for Ansible
+    groups: [adm, sudo]
+    sudo: "ALL=(ALL) NOPASSWD:ALL"
+    shell: /bin/bash
+    lock_passwd: true
+    ssh_authorized_keys:
+      - __SSH_PUBLIC_KEY__
+
+# Вход по паролю по SSH выключен сразу, root — тоже.
+ssh_pwauth: false
+disable_root: true
+
+package_update: true
+packages:
+  - python3
+  - python3-apt
+  - ca-certificates
+
+final_message: "bootstrap ready after $UPTIME seconds"

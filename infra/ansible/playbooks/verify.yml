@@ -1,0 +1,83 @@
+---
+# `make verify JOB=<job_id>`: проверить конкретное задание насквозь.
+# Timeout ограничен: каждый wait использует retries+delay и завершается ошибкой,
+# если за выделенное время результат не появился.
+- name: Verify one processed job end to end
+  hosts: lab
+  become: true
+  gather_facts: false
+  vars:
+    ansible_user: "{{ admin_user }}"
+    verify_timeout: 180
+  tasks:
+    - name: Make sure a job id was supplied
+      ansible.builtin.assert:
+        that:
+          - job_id is defined and job_id | length > 0
+        fail_msg: "verify.yml needs -e job_id=<id>"
+
+    - name: Wait until the result file exists and is not empty
+      ansible.builtin.stat:
+        path: "{{ results_dir }}/{{ job_id }}.json"
+      register: verify_file
+      until: verify_file.stat.exists and verify_file.stat.size | int > 0
+      retries: "{{ (verify_timeout | int) // 5 }}"
+      delay: 5
+
+    - name: Read the result file
+      ansible.builtin.slurp:
+        src: "{{ results_dir }}/{{ job_id }}.json"
+      register: verify_raw
+
+    - name: Parse the result file
+      ansible.builtin.set_fact:
+        verify_quotes: "{{ verify_raw.content | b64decode | from_json }}"
+
+    - name: The result must be a non-empty JSON array
+      ansible.builtin.assert:
+        that:
+          - verify_quotes is iterable
+          - verify_quotes | length > 0
+        fail_msg: "{{ results_dir }}/{{ job_id }}.json is not a non-empty JSON array"
+
+    - name: The result must be served by Nginx over HTTP
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:{{ http_port }}/results/{{ job_id }}.json"
+        return_content: true
+        status_code: 200
+      register: verify_http
+
+    - name: The HTTP body must be the same JSON array
+      ansible.builtin.assert:
+        that:
+          - (verify_http.content | from_json) | length == verify_quotes | length
+        fail_msg: "the Nginx response does not match the file on disk"
+
+    - name: No temporary files must be left behind
+      ansible.builtin.find:
+        paths: "{{ results_dir }}"
+        patterns: "{{ job_id }}.json.tmp*"
+      register: verify_temp
+
+    - name: Assert that no temporary file remains
+      ansible.builtin.assert:
+        that:
+          - verify_temp.matched == 0
+        fail_msg: "temporary file(s) left next to {{ job_id }}.json"
+
+    - name: Wait for an empty pending entries list
+      ansible.builtin.command:
+        cmd: >-
+          docker exec {{ redis_container }} redis-cli --raw
+          XPENDING {{ redis_stream }} {{ redis_group }}
+      register: verify_pending
+      until: (verify_pending.stdout | trim) == '0'
+      retries: "{{ (verify_timeout | int) // 3 }}"
+      delay: 3
+      changed_when: false
+
+    - name: Show the verification summary
+      ansible.builtin.debug:
+        msg: >-
+          job {{ job_id }} verified: file ok, nginx http 200, no temp files,
+          XPENDING empty

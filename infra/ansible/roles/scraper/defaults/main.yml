@@ -1,0 +1,10 @@
+---
+# Самодостаточные значения по умолчанию; group_vars перекрывает их.
+app_dir: /srv/quotes-scraper
+results_dir: /srv/quotes-scraper/results
+deploy_dir: /srv/quotes-scraper/deploy
+compose_file: /srv/quotes-scraper/deploy/compose.yaml
+scraper_image: quotes-scraper
+http_port: 8080
+# Куда складываем sha256 контекста сборки, чтобы не пересобирать образ зря.
+scraper_hash_file: /srv/quotes-scraper/.build-hash

@@ -1,0 +1,13 @@
+---
+# ansible-lint: ловим ошибки, не спорим о косметике.
+profile: min
+exclude_paths:
+  - .lab/
+  - infra/ansible/inventories/lab/
+skip_list:
+  # Роль scraper считает sha256 контекста сборки через конвейер `find | xargs |
+  # sha256sum`; set -o pipefail в задаче выставлен.
+  - risky-shell-pipe
+  # У ролей ssh_hardening/docker_engine/scraper часть переменных общая для всего
+  # проекта (admin_user, app_dir, results_dir) и живёт в group_vars.
+  - var-naming

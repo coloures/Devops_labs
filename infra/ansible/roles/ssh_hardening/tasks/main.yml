@@ -1,0 +1,65 @@
+---
+# Роль ssh_hardening запускается последней в site.yml — только после того, как
+# вход под постоянным admin подтверждён. Порядок задач важен: сначала пишем и
+# проверяем конфиг, и лишь затем handler перезапускает sshd.
+
+- name: Make sure the sshd drop-in directory exists
+  ansible.builtin.file:
+    path: /etc/ssh/sshd_config.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Write the SSH hardening drop-in
+  ansible.builtin.copy:
+    dest: "{{ sshd_hardening_file }}"
+    content: |
+      # Управляется Ansible (роль ssh_hardening). Руками не редактировать.
+      {% for option, value in sshd_hardening_options.items() %}
+      {{ option }} {{ value }}
+      {% endfor %}
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart sshd
+
+# --- Отключаем временный bootstrap-вход -------------------------------------
+- name: Look for the temporary bootstrap user's home directory
+  ansible.builtin.stat:
+    path: "/home/{{ bootstrap_user }}"
+  register: ssh_bootstrap_home
+
+- name: Remove the bootstrap user's authorized keys
+  ansible.builtin.file:
+    path: "/home/{{ bootstrap_user }}/.ssh/authorized_keys"
+    state: absent
+  when: ssh_bootstrap_home.stat.exists
+
+- name: Lock the bootstrap account and remove its login shell
+  ansible.builtin.user:
+    name: "{{ bootstrap_user }}"
+    password_lock: true
+    shell: /usr/sbin/nologin
+  when: ssh_bootstrap_home.stat.exists
+
+# --- Проверки: конфиг валиден и нужные опции реально действуют ---------------
+- name: Validate the sshd configuration (sshd -t)
+  ansible.builtin.command:
+    cmd: sshd -t
+  changed_when: false
+
+- name: Read the effective sshd configuration (sshd -T)
+  ansible.builtin.command:
+    cmd: sshd -T
+  register: ssh_effective
+  changed_when: false
+
+- name: Assert that the hardened options are effective
+  ansible.builtin.assert:
+    that:
+      - "'permitrootlogin no' in ssh_effective.stdout"
+      - "'passwordauthentication no' in ssh_effective.stdout"
+      - "'kbdinteractiveauthentication no' in ssh_effective.stdout"
+      - "'pubkeyauthentication yes' in ssh_effective.stdout"
+    fail_msg: "sshd did not apply the hardened options"

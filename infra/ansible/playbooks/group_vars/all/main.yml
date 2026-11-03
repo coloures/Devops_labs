@@ -1,0 +1,43 @@
+---
+# Общие переменные всех playbook-ов лабораторной. Лежат в group_vars, чтобы
+# их видели и playbook-и, и роли (role defaults имеют меньший приоритет).
+
+# Постоянный пользователь, которого создаёт роль bootstrap.
+admin_user: admin
+# Временный пользователь из cloud-init, которого отключает ssh_hardening.
+bootstrap_user: bootstrap
+
+# Каталоги приложения на целевой VM.
+app_dir: /srv/quotes-scraper
+results_dir: /srv/quotes-scraper/results
+deploy_dir: /srv/quotes-scraper/deploy
+compose_file: /srv/quotes-scraper/deploy/compose.yaml
+
+# Наружу публикуется только HTTP-порт Nginx.
+http_port: 8080
+
+# Имена Redis Stream и consumer group.
+redis_stream: jobs
+redis_group: scrapers
+
+# Имена контейнеров (заданы container_name в deploy/compose.yaml, поэтому
+# известны заранее и не зависят от имени compose-проекта).
+redis_container: quotes-redis
+scraper_container: quotes-scraper
+nginx_container: quotes-nginx
+
+# Имя compose-проекта и образа (deploy/compose.yaml: name: и image:).
+# Проект определяет имя сети по умолчанию: quotes-scraper_default.
+compose_project: quotes-scraper
+scraper_image: quotes-scraper
+
+# Корень репозитория на control node (playbooks -> ansible -> infra -> repo).
+repo_root: "{{ playbook_dir }}/../../.."
+
+# Публичный ключ: его cloud-init кладёт временному bootstrap-пользователю,
+# а роль bootstrap — постоянному admin.
+admin_ssh_public_key_file: "{{ repo_root }}/.lab/id_ed25519.pub"
+
+# known_hosts control node; проверка host key не отключается (accept-new
+# только добавляет новый ключ, но не игнорирует изменившийся).
+known_hosts_file: "{{ repo_root }}/.lab/known_hosts"

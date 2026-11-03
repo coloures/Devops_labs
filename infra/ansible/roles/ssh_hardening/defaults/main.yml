@@ -1,0 +1,10 @@
+---
+# Имя файла начинается с 00-, чтобы sshd прочитал его раньше, чем
+# 50-cloud-init.conf: для каждого ключевого слова sshd берёт ПЕРВОЕ значение.
+sshd_hardening_file: /etc/ssh/sshd_config.d/00-quotes-hardening.conf
+sshd_hardening_options:
+  PermitRootLogin: "no"
+  PasswordAuthentication: "no"
+  KbdInteractiveAuthentication: "no"
+  ChallengeResponseAuthentication: "no"
+  PubkeyAuthentication: "yes"

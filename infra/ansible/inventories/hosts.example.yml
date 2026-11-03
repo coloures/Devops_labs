@@ -1,0 +1,20 @@
+---
+# Пример inventory. Реальный файл генерируется командой `make provision`
+# в inventories/lab/hosts.yml и в git не коммитится (см. .gitignore).
+#
+# Этот пример используется в CI для `ansible-playbook --syntax-check`.
+all:
+  children:
+    lab:
+      hosts:
+        scraper:
+          # 192.0.2.0/24 — документационный диапазон, реального хоста нет.
+          ansible_host: 192.0.2.10
+          # Первое подключение идёт под временным bootstrap-пользователем,
+          # затем site.yml переключается на постоянного admin.
+          ansible_user: bootstrap
+          ansible_ssh_private_key_file: ../../.lab/id_ed25519
+          ansible_ssh_common_args: >-
+            -o UserKnownHostsFile=../../.lab/known_hosts
+            -o StrictHostKeyChecking=accept-new
+          ansible_python_interpreter: /usr/bin/python3
