@@ -17,7 +17,9 @@ VM_TIMEOUT   ?= 1800
 BOOTSTRAP_USER ?= bootstrap
 
 # Multipass: на Windows/WSL берём multipass.exe, иначе linux-клиент.
-MULTIPASS ?= $(shell command -v multipass.exe 2>/dev/null || command -v multipass 2>/dev/null || echo multipass)
+# Возвращаем именно ИМЯ команды, а не путь: путь Windows содержит пробел
+# ("Program Files"), и без кавычек он развалился бы на два слова в рецепте.
+MULTIPASS ?= $(shell if command -v multipass.exe >/dev/null 2>&1; then echo multipass.exe; elif command -v multipass >/dev/null 2>&1; then echo multipass; else echo multipass; fi)
 
 # ---------- Пути ----------
 LAB_DIR      := .lab
@@ -76,7 +78,7 @@ check-tools:
 	@command -v ssh-keygen >/dev/null 2>&1 || { echo "Ошибка: нет ssh-keygen (openssh-client)"; exit 1; }
 	@command -v python3 >/dev/null 2>&1 || { echo "Ошибка: нет python3 (нужен для генерации inventory)"; exit 1; }
 	@command -v ansible-playbook >/dev/null 2>&1 || { echo "Ошибка: нет ansible-playbook. Установите ansible-core."; exit 1; }
-	@$(MULTIPASS) version >/dev/null 2>&1 || { echo "Ошибка: не найден Multipass ('$(MULTIPASS)'). В WSL он вызывается как multipass.exe."; exit 1; }
+	@"$(MULTIPASS)" version >/dev/null 2>&1 || { echo "Ошибка: не найден Multipass ('$(MULTIPASS)'). В WSL он вызывается как multipass.exe."; exit 1; }
 
 # ---------- Подготовка control node: .lab/ и SSH-ключ ----------
 setup: check-tools
@@ -97,11 +99,11 @@ deps:
 
 # ---------- Создание VM (Multipass) с bootstrap через cloud-init ----------
 vm-up: setup deps
-	@if $(MULTIPASS) info $(VM_NAME) >/dev/null 2>&1; then \
+	@if "$(MULTIPASS)" info $(VM_NAME) >/dev/null 2>&1; then \
 		echo "VM $(VM_NAME) уже существует — создание пропущено"; \
 	else \
 		echo "создаю VM $(VM_NAME): Ubuntu $(UBUNTU_IMAGE), $(VM_CPUS) CPU, $(VM_MEMORY) RAM, $(VM_DISK) disk"; \
-		$(MULTIPASS) launch $(UBUNTU_IMAGE) \
+		"$(MULTIPASS)" launch $(UBUNTU_IMAGE) \
 			--name $(VM_NAME) \
 			--cpus $(VM_CPUS) \
 			--memory $(VM_MEMORY) \
@@ -114,7 +116,7 @@ vm-up: setup deps
 inventory:
 	@mkdir -p $(LAB_DIR) $(ANSIBLE_DIR)/inventories/lab
 	@i=0; \
-	 until ip=$$($(MULTIPASS) info $(VM_NAME) --format json 2>/dev/null \
+	 until ip=$$("$(MULTIPASS)" info $(VM_NAME) --format json 2>/dev/null \
 			| python3 -c "import json,sys; d=json.load(sys.stdin); print((d.get('info',{}).get('$(VM_NAME)',{}).get('ipv4') or [''])[0])" 2>/dev/null) \
 			&& [ -n "$$ip" ]; do \
 	   i=$$((i+1)); \
@@ -194,7 +196,7 @@ fault-test: check-inventory
 
 # ---------- Удаление окружения (повторный запуск безопасен) ----------
 destroy:
-	-@$(MULTIPASS) delete --purge $(VM_NAME)
+	-@"$(MULTIPASS)" delete --purge $(VM_NAME)
 	-@rm -rf $(LAB_DIR)
 	-@rm -rf $(ANSIBLE_DIR)/inventories/lab
 	@echo "VM $(VM_NAME) и $(LAB_DIR)/ удалены; окружение можно создать заново"
