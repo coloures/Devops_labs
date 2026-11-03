@@ -15,6 +15,7 @@ VM_MEMORY    ?= 4G
 VM_DISK      ?= 20G
 VM_TIMEOUT   ?= 1800
 BOOTSTRAP_USER ?= bootstrap
+VM_NETWORK ?= bridged
 
 # Multipass: на Windows/WSL берём multipass.exe, иначе linux-клиент.
 # Возвращаем именно ИМЯ команды, а не путь: путь Windows содержит пробел
@@ -109,6 +110,7 @@ vm-up: setup deps
 			--memory $(VM_MEMORY) \
 			--disk $(VM_DISK) \
 			--timeout $(VM_TIMEOUT) \
+			--network $(VM_NETWORK) \
 			--cloud-init $(LAB_CLOUD); \
 	fi
 
@@ -117,7 +119,7 @@ inventory:
 	@mkdir -p $(LAB_DIR) $(ANSIBLE_DIR)/inventories/lab
 	@i=0; \
 	 until ip=$$("$(MULTIPASS)" info $(VM_NAME) --format json 2>/dev/null \
-			| python3 -c "import json,sys; d=json.load(sys.stdin); print((d.get('info',{}).get('$(VM_NAME)',{}).get('ipv4') or [''])[0])" 2>/dev/null) \
+			| python3 -c "import json,sys; d=json.load(sys.stdin); a=[x for x in (d.get('info',{}).get('$(VM_NAME)',{}).get('ipv4') or []) if x.startswith('10.0.2.')==False and x.count('.')==3]; print(a[0] if a else '')" 2>/dev/null) \
 			&& [ -n "$$ip" ]; do \
 	   i=$$((i+1)); \
 	   if [ $$i -gt 60 ]; then echo "Ошибка: Multipass так и не отдал IPv4"; exit 1; fi; \

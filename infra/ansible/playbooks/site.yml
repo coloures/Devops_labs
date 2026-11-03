@@ -16,6 +16,7 @@
     - name: Find out which user we are logged in as
       ansible.builtin.command: whoami
       register: site_whoami
+      become: false
       changed_when: false
 
     - name: Require a real login as the permanent admin before hardening
