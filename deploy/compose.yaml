@@ -30,8 +30,8 @@ services:
     depends_on:
       redis:
         condition: service_healthy
-    # Воркер лабораторной 3: Redis Streams -> JSON на диск -> XACK.
-    command: ["python", "src/redis_worker.py"]
+    # Воркер: забирает задание из Redis Stream, пишет JSON на диск, затем XACK.
+    command: ["python", "src/worker.py"]
     environment:
       REDIS_HOST: redis
       REDIS_PORT: "6379"
